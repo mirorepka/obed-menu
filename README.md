@@ -1,6 +1,6 @@
 # Obed v okolí 🍽️
 
-PWA aplikácia: podľa aktuálnej polohy ukáže **dnešné obedové menu do 15 minút pešo**,
+PWA aplikácia: podľa aktuálnej polohy ukáže **dnešné obedové (aj večerné) menu do 15 minút pešo**,
 s jedlami, cenami, navigáciou a odkazom na web reštaurácie. Celé zadarmo, bez AI.
 
 Web: https://menu.repka.sk

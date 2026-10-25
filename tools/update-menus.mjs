@@ -95,7 +95,7 @@ function linkScore({ url, text }) {
   let s = '';
   try { s = fold(`${text} ${decodeURIComponent(url)}`); } catch { s = fold(`${text} ${url}`); }
   let score = 0;
-  if (/denn\w*[\s_-]*menu|obedov\w*[\s_-]*menu|menu[\s_-]*dna|tyzdenn\w*[\s_-]*menu|denni[\s_-]*menu|daily[\s_-]*menu|lunch|obed/.test(s)) score += 10;
+  if (/denn\w*[\s_-]*menu|obedov\w*[\s_-]*menu|menu[\s_-]*dna|tyzdenn\w*[\s_-]*menu|denni[\s_-]*menu|daily[\s_-]*menu|lunch|obed|vecern\w*[\s_-]*menu/.test(s)) score += 10;
   else if (/\bmenu\b|jedal|ponuk/.test(s)) score += 3;
   if (/napoj|vin[ao]|drink|wine|alergen|kariera|gdpr|cookies|catering|rozvoz/.test(s)) score -= 6;
   return score;
@@ -158,8 +158,11 @@ function clean(line) {
   return line;
 }
 
-// Vráti { items: [[druh, názov, cena]], price } alebo null
-function todaysMenu(lines) {
+const EVENING_HEAD = /vecern\w*\s*(menu|ponuk)|^vecer[ae]\b|\bdinner\b|evening menu/;
+
+// Vráti { items: [[druh, názov, cena, večer?]], price } alebo null.
+// pageMeal = 1, ak je celá stránka večerné menu (napr. odkaz „Večerné menu").
+function todaysMenu(lines, pageMeal = 0) {
   const folded = lines.map(fold);
   const all = folded.join('\n');
   if (!/polievk|polevk|polievok|hlavn\w* jedl|menu/.test(all)) return null;
@@ -169,25 +172,41 @@ function todaysMenu(lines) {
 
   const days = lines.map((l, i) => dayOf(l, folded[i]));
   const today = `${D}.${M}`;
-  let seg;
-  let start = days.findIndex((d, i) => d === DOW || (folded[i].length < 90 && datesIn(folded[i]).includes(today) && !PRICE_RE.test(folded[i])));
-  if (start >= 0) {
-    let end = start + 1;
-    while (end < lines.length && end - start <= MAX_LINES && (days[end] === -1 || days[end] === DOW) && !isEnd(folded[end])) end++;
-    seg = [afterDay(lines[start]), ...lines.slice(start + 1, end)];
-  } else {
+  // Či ide o obed (0) alebo večeru (1): podľa najbližšieho nadpisu „… menu" nad úsekom
+  const mealAt = (i) => {
+    for (let j = i; j >= Math.max(0, i - 80); j--) {
+      const f = folded[j];
+      if (f.length > 60) continue;
+      if (EVENING_HEAD.test(f)) return 1;
+      if (/obedov\w* menu|denn\w* menu|menu dna|denni menu|\bobed\b|lunch/.test(f)) return 0;
+    }
+    return pageMeal;
+  };
+  // Úseky s dnešným dňom – môže ich byť viac (napr. obedové a potom večerné menu na celý týždeň)
+  const segs = [];
+  for (let i = 0; i < lines.length; i++) {
+    const isToday = days[i] === DOW || (folded[i].length < 90 && datesIn(folded[i]).includes(today) && !PRICE_RE.test(folded[i]));
+    if (!isToday) continue;
+    let end = i + 1;
+    while (end < lines.length && end - i <= MAX_LINES && (days[end] === -1 || days[end] === DOW) && !isEnd(folded[end])) end++;
+    segs.push({ meal: mealAt(i), lines: [afterDay(lines[i]), ...lines.slice(i + 1, end)] });
+    i = end - 1;
+  }
+  if (!segs.length) {
     // stránka bez dní: len jedno menu, a to ak je pri ňom dnešný dátum
     if (!dates.includes(today) || days.some((d) => d >= 0)) return null;
-    start = folded.findIndex((f) => /denn\w* menu|obedov\w* menu|menu dna|denni menu/.test(f));
+    const start = folded.findIndex((f) => /denn\w* menu|obedov\w* menu|menu dna|denni menu/.test(f) || EVENING_HEAD.test(f));
     if (start < 0) return null;
     let end = start + 1;
     while (end < lines.length && end - start <= MAX_LINES && !isEnd(folded[end])) end++;
-    seg = lines.slice(start + 1, end);
+    segs.push({ meal: EVENING_HEAD.test(folded[start]) ? 1 : pageMeal, lines: lines.slice(start + 1, end) });
   }
 
   const items = [];
-  let kind = 1, price = '', sinceHeader = 0, priceNext = false;
-  for (let line of seg) {
+  let price = '';
+  for (const seg of segs) {
+  let kind = 1, sinceHeader = 0, priceNext = false, meal = seg.meal;
+  for (let line of seg.lines) {
     if (dayOf(line, fold(line)) === DOW) line = afterDay(line);
     // „Polievka: …", „Polievka dňa: …" → polievka bez predpony
     const soupPrefix = /^\s*(?:polievk[ay]|pol\.)\s*(?:d[ňn]a|\d)?\s*[:\-–,]\s*|^\s*polievk[ay]\s+(?=\p{Lu})/iu;
@@ -195,6 +214,9 @@ function todaysMenu(lines) {
     if (isSoupLine) line = line.replace(soupPrefix, '').replace(/^polievk[ay],?\s*/i, '');
     const f = fold(line);
     if (f.length > 220 || !f) continue;
+    // nadpisy „Večerné menu" / „Obedové menu" vnútri dňa
+    if (f.length < 40 && EVENING_HEAD.test(f) && !PRICE_RE.test(f)) { meal = 1; kind = 1; continue; }
+    if (f.length < 40 && /^(obedov\w* menu|obed\b|denn\w* menu)/.test(f) && !PRICE_RE.test(f)) { meal = 0; kind = 1; continue; }
     if (/^(polievk|polevk)/.test(f) && f.length < 25) { kind = 0; sinceHeader = 0; continue; }
     if (/^(hlavn|jedla\b|menu\s*\d?\s*:?$)/.test(f) && f.length < 25) { kind = 1; continue; }
     if (/^(dezert|zakusk)/.test(f) && f.length < 20) { kind = 2; continue; }
@@ -219,18 +241,19 @@ function todaysMenu(lines) {
     if (JUNK.test(lf) || (!p && !FOOD.test(lf))) continue;
     // riadok bez ceny začínajúci malým písmenom = pokračovanie názvu (príloha)
     if (!p && items.length && !items.at(-1)[2] && /^[a-zà-ž(,]/.test(line) && items.at(-1)[1].length < 90) { items.at(-1)[1] += `, ${line}`; continue; }
-    if (items.some((x) => x[1] === line.slice(0, 120))) continue;   // rovnaké jedlo viackrát (tabuľky)
+    if (items.some((x) => x[1] === line.slice(0, 120) && (x[3] || 0) === meal)) continue;   // rovnaké jedlo viackrát (tabuľky)
     if (p && parseFloat(p.replace(',', '.')) > 25) continue;        // to nie je obedové menu (hostiny, catering…)
     const soupName = isSoupLine || /polievk|polevk|vyvar|\bkrem\b|kremov/.test(lf)
       || ((SOUP.test(lf) || /^\p{L}+ova\b/u.test(lf)) && lf.length < 50 && !MAIN.test(lf));
-    const soup = kind !== 2 && items.filter((x) => x[0] === 0).length < 3 && (soupName || (kind === 0 && sinceHeader < 2 && !MAIN.test(lf)));
+    const soup = kind !== 2 && items.filter((x) => x[0] === 0 && (x[3] || 0) === meal).length < 3 && (soupName || (kind === 0 && sinceHeader < 2 && !MAIN.test(lf)));
     const k = soup ? 0 : kind === 0 ? 1 : kind;
     sinceHeader++;
-    items.push([k, line.slice(0, 120), p]);
+    items.push(meal ? [k, line.slice(0, 120), p, 1] : [k, line.slice(0, 120), p]);   // 4. pole = večerné menu
+  }
   }
   // aspoň dve jedlá, väčšina naozaj jedlá, a aspoň niečo s cenou (inak to asi nie je menu)
   const food = items.filter((x) => FOOD.test(fold(x[1]))).length;
-  if (items.length < 2 || items.length > 20 || food < 2 || food < items.length * 0.6) return null;
+  if (items.length < 2 || items.length > 30 || food < 2 || food < items.length * 0.6) return null;
   if (!items.some((x) => x[2]) && !price) return null;
   return { items, price };
 }
@@ -243,23 +266,28 @@ async function pool(items, n, fn) {
 }
 
 // Nájde menu na webe podniku. Výsledok: { url, menu } | { url, link: true } | null
+const isEveningLink = (l) => { try { return /vecer|dinner/.test(fold(`${l.text} ${decodeURIComponent(l.url)}`)); } catch { return false; } };
+
 async function findMenu(web, known) {
   const tried = new Set();
+  const evening = new Set();   // odkazy na samostatné večerné menu
   let bestLink = null;
-  const consider = async (url, depth) => {
-    if (tried.has(url) || tried.size > 6) return null;
+  const consider = async (url, depth, meal = 0) => {
+    if (tried.has(url) || tried.size > 8) return null;
     tried.add(url);
     let page;
     try { page = await get(url); } catch { return null; }
     if (page.pdf) { bestLink ??= { url: page.url, link: true }; return null; }
     if (!page.html) return null;
-    const menu = todaysMenu(htmlToLines(page.html));
+    const host = new URL(page.url).hostname.replace(/^www\./, '');
+    const all = links(page.html, page.url).filter((l) => new URL(l.url).hostname.replace(/^www\./, '') === host || /\.pdf\b/i.test(l.url));
+    all.filter((l) => isEveningLink(l) && linkScore(l) > 0).forEach((l) => evening.add(l.url));
+    const menu = todaysMenu(htmlToLines(page.html), meal);
     if (menu) return { url: page.url, menu };
     if (depth > 0) {
-      const host = new URL(page.url).hostname.replace(/^www\./, '');
-      const sub = links(page.html, page.url)
+      const sub = all
         .map((l) => ({ ...l, s: linkScore(l) }))
-        .filter((l) => l.s > 0 && (new URL(l.url).hostname.replace(/^www\./, '') === host || /\.pdf\b/i.test(l.url)))
+        .filter((l) => l.s > 0)
         .sort((a, b) => b.s - a.s);
       const seen = new Set();
       for (const l of sub) {
@@ -267,14 +295,27 @@ async function findMenu(web, known) {
         if (seen.has(l.url)) continue;
         seen.add(l.url);
         if (l.s >= 10) bestLink ??= { url: l.url, link: true };
-        const r = await consider(l.url, depth - 1);
+        const r = await consider(l.url, depth - 1, isEveningLink(l) ? 1 : 0);
         if (r) return r;
       }
     }
     return null;
   };
-  if (known) { const r = await consider(known, 0); if (r) return r; }
-  return (await consider(web, 1)) || bestLink;
+  let r = known ? await consider(known, 0) : null;
+  if (!r) r = await consider(web, 1);
+  if (!r) return bestLink;
+  // Našlo sa len obedové menu → skúsiť aj samostatnú stránku s večerným menu
+  if (!r.menu.items.some((x) => x[3])) {
+    for (const url of [...evening].filter((u) => !tried.has(u)).slice(0, 2)) {
+      const e = await consider(url, 0, 1);
+      if (e) {
+        r.menu.items.push(...e.menu.items.filter((x) => x[3]));
+        r.evening = e.url;
+        break;
+      }
+    }
+  }
+  return r;
 }
 
 // ---------- beh ----------
@@ -310,7 +351,7 @@ fs.writeFileSync(path.join(CACHE_DIR, 'today.json'), JSON.stringify({ date: TODA
 fs.rmSync(path.join(OUT_DIR, 't'), { recursive: true, force: true });
 fs.mkdirSync(path.join(OUT_DIR, 't'), { recursive: true });
 const tiles = new Map();
-let total = 0;
+let total = 0, totalEve = 0;
 for (const [id, name, lat, lon, amenity, web, addr] of places) {
   const r = results[id];
   if (!r && !/restaurant|pub|canteen|food_court/.test(amenity)) continue;   // kaviarne a fast food bez menu nezobrazujeme
@@ -320,10 +361,16 @@ for (const [id, name, lat, lon, amenity, web, addr] of places) {
   if (amenity === 'canteen') row.c = 1;
   if (addr) row.addr = addr;
   if (web) row.web = web;
-  if (r?.menu) { row.url = r.url; row.items = r.menu.items; if (r.menu.price) row.price = r.menu.price; total++; }
+  if (r?.menu) {
+    row.url = r.url; row.items = r.menu.items;
+    if (r.menu.price) row.price = r.menu.price;
+    if (r.evening) row.eve = r.evening;
+    total++;
+    if (r.menu.items.some((x) => x[3])) totalEve++;
+  }
   else if (r?.link) row.url = r.url;
   tiles.get(key).push(row);
 }
 for (const [key, rows] of tiles) fs.writeFileSync(path.join(OUT_DIR, 't', `${key}.json`), JSON.stringify(rows));
 fs.writeFileSync(path.join(OUT_DIR, 'info.json'), JSON.stringify({ date: TODAY, updated: now.toISOString(), menus: total, tile: TILE }));
-console.log(`Hotovo: ${total} reštaurácií s dnešným menu (${nMenu} nových, ${nLink} len odkaz), ${tiles.size} dlaždíc.`);
+console.log(`Hotovo: ${total} reštaurácií s dnešným menu, z toho ${totalEve} aj s večerným (${nMenu} nových, ${nLink} len odkaz), ${tiles.size} dlaždíc.`);

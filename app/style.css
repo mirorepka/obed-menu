@@ -178,3 +178,12 @@ h2 { font-size: 1.1rem; margin: 0 0 8px; }
 .ios-steps li { margin: 6px 0; }
 
 footer #installFooter { width: 100%; margin-bottom: 10px; }
+
+/* úvod */
+.intro p { margin: 0 0 8px; }
+.intro .muted { font-size: .95rem; }
+.intro .btn { margin-top: 4px; }
+
+/* obed / večer */
+.meal { margin: 14px 0 -4px; font-weight: 700; font-size: .95rem; }
+.eve { font-size: .8rem; font-weight: 600; color: var(--accent); white-space: nowrap; }

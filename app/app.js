@@ -8,6 +8,7 @@ const OTHERS_COUNT = 10;
 const RERENDER_MOVE_M = 40;
 const KINDS = ['Polievka', '', 'Dezert'];
 const SK_BBOX = [47.7, 16.8, 49.65, 22.6];   // juh, západ, sever, východ
+const EVENING_FROM_H = 15;   // od kedy dávať prednosť večernému menu
 
 const $ = (id) => document.getElementById(id);
 const state = { info: null, tiles: new Map(), pos: null, manual: null, locError: null, watchId: null, renderedAt: null };
@@ -45,21 +46,33 @@ async function loadTiles(keys) {
 }
 
 // ---------- vykreslenie ----------
-function dishes(r) {
-  return `<ul class="dishes">${r.items.map(([k, name, price]) =>
+const isEvening = () => new Date().getHours() >= EVENING_FROM_H;
+const hasEve = (r) => r.items.some((x) => x[3]);
+const hasLunch = (r) => r.items.some((x) => !x[3]);
+function dishList(items) {
+  return `<ul class="dishes">${items.map(([k, name, price]) =>
     `<li><span>${KINDS[k] ? `<span class="k">${KINDS[k]}</span>` : ''}${esc(name)}</span><span class="p">${esc(price)}</span></li>`).join('')}</ul>`;
+}
+// Obedové a večerné menu zvlášť; večer ide večerné prvé
+function dishes(r) {
+  const lunch = r.items.filter((x) => !x[3]), eve = r.items.filter((x) => x[3]);
+  if (!eve.length) return dishList(lunch);
+  const parts = [['☀️ Obedové menu', lunch], ['🌙 Večerné menu', eve]].filter(([, l]) => l.length);
+  if (isEvening()) parts.reverse();
+  return parts.map(([t, l]) => `<p class="meal">${t}</p>${dishList(l)}`).join('');
 }
 const meta = (r) => (r.addr ? `<p class="r-meta">${esc(r.addr)}</p>` : '');
 const priceTag = (r) => (r.price ? `<span class="tag">💶 Menu ${esc(r.price)}</span>` : '');
 function actions(r) {
   return `<div class="actions">
     <a class="btn" href="${esc(navUrl(r))}" target="_blank" rel="noopener">🧭 Navigovať</a>
-    <a class="btn ghost" href="${esc(r.url)}" target="_blank" rel="noopener">Menu na webe</a></div>`;
+    <a class="btn ghost" href="${esc(isEvening() && r.eve ? r.eve : r.url)}" target="_blank" rel="noopener">Menu na webe</a></div>`;
 }
 
 function renderBest(r) {
+  const label = isEvening() && hasEve(r) ? 'Najbližšie večerné menu' : !hasLunch(r) ? 'Najbližšie večerné menu' : 'Najbližšie obedové menu';
   return `<section class="card">
-    <p class="muted" style="margin:0">Najbližšie obedové menu</p>
+    <p class="muted" style="margin:0">${label}</p>
     <div class="r-head"><p class="r-name">${esc(r.n)}</p><span class="dist">🚶 ${walkMin(r.d)} min</span></div>
     ${meta(r)}${priceTag(r)}${dishes(r)}${actions(r)}</section>`;
 }
@@ -67,9 +80,10 @@ function renderBest(r) {
 function renderMore(list) {
   if (!list.length) return '';
   return '<section class="card"><h2>Ďalšie menu v okolí</h2>' + list.map((r) => {
-    const main = r.items.find(([k]) => k === 1) || r.items[0];
+    const pool = r.items.filter((x) => !!x[3] === (isEvening() && hasEve(r)));
+    const main = pool.find(([k]) => k === 1) || pool[0] || r.items[0];
     return `<details class="more" data-n="${esc(r.n)}"><summary>
-      <span><b>${esc(r.n)}</b><span class="sub">${esc(main[1])}${r.items.length > 1 ? ` + ${r.items.length - 1}` : ''}</span></span>
+      <span><b>${esc(r.n)}</b>${hasEve(r) ? ' <span class="eve">🌙 aj večer</span>' : ''}<span class="sub">${esc(main[1])}${r.items.length > 1 ? ` + ${r.items.length - 1}` : ''}</span></span>
       <span class="dist">🚶 ${walkMin(r.d)} min</span></summary>
       ${meta(r)}${priceTag(r)}${dishes(r)}${actions(r)}</details>`;
   }).join('') + '</section>';
@@ -119,6 +133,8 @@ async function render() {
   const now = new Date();
   const fresh = state.info.date === ymd(now);
   const menus = fresh ? near.filter((r) => r.items) : [];
+  // večer: podniky s večerným menu dopredu (inak podľa vzdialenosti)
+  if (isEvening()) menus.sort((a, b) => hasEve(b) - hasEve(a) || a.d - b.d);
   const links = near.filter((r) => !r.items && r.url);
   const others = near.filter((r) => !r.items && !r.url).slice(0, OTHERS_COUNT);
 
@@ -287,7 +303,19 @@ async function loadInfo() {
   render();
 }
 
+function setupIntro() {
+  let seen = false;
+  try { seen = localStorage.getItem('introSeen') === '1'; } catch { /* súkromné okno */ }
+  if (seen) return;
+  $('intro').classList.remove('hidden');
+  $('introOk').onclick = () => {
+    $('intro').classList.add('hidden');
+    try { localStorage.setItem('introSeen', '1'); } catch { /* nevadí */ }
+  };
+}
+
 async function init() {
+  setupIntro();
   setupInstall();
   $('placeBtn').onclick = () => { $('placePicker').classList.remove('hidden'); $('placeSearch').value = ''; renderPlacePicker(); $('placeSearch').focus(); };
   $('closePlace').onclick = () => $('placePicker').classList.add('hidden');
