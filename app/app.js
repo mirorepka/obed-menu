@@ -216,50 +216,58 @@ function startLocation() {
 }
 
 // ---------- inštalácia aplikácie ----------
+const IOS_STEPS = ['Dole ťukni na <b>Zdieľať</b> (štvorček so šípkou ⬆️)', 'Vyber <b>Pridať na plochu</b>', 'Ťukni na <b>Pridať</b>'];
+const MENU_STEPS = ['Ťukni na menu prehliadača <b>⋮</b>', 'Vyber <b>Pridať na plochu</b> alebo <b>Inštalovať aplikáciu</b>'];
+
 function setupInstall() {
   const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (standalone) return;
   let dismissed = false;
   try { dismissed = sessionStorage.getItem('installLater') === '1'; } catch { /* súkromné okno */ }
-  if (standalone || dismissed) return;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  const box = $('install'), btn = $('installBtn'), later = $('installLater');
+  const box = $('install'), btn = $('installBtn'), later = $('installLater'), footerBtn = $('installFooter');
+  let deferred = null;   // udalosť prehliadača, ktorá otvorí inštalačné okno
+
   const hide = () => box.classList.add('hidden');
+  const offerButton = () => {
+    $('installText').textContent = 'Budeš ju mať na ploche ako ostatné aplikácie a otvoríš ju jedným ťuknutím.';
+    btn.classList.remove('hidden');
+    later.textContent = 'Neskôr';
+    box.classList.remove('hidden');
+  };
   const showSteps = (steps) => {
-    $('installText').innerHTML = `Budeš ju mať na ploche ako ostatné aplikácie:<ol class="ios-steps">${steps.map((s) => `<li>${s}</li>`).join('')}</ol>`;
+    $('installText').innerHTML = `Budeš ju mať na ploche ako ostatné aplikácie:<ol class="ios-steps">${steps.map((x) => `<li>${x}</li>`).join('')}</ol>`;
     btn.classList.add('hidden');
     later.textContent = 'Rozumiem';
     box.classList.remove('hidden');
   };
-  later.onclick = () => {
-    hide();
-    try { sessionStorage.setItem('installLater', '1'); } catch { /* nevadí */ }
-  };
-
-  let deferred = null;
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferred = e;
-    btn.classList.remove('hidden');
-    later.textContent = 'Neskôr';
-    box.classList.remove('hidden');
-  });
-  btn.onclick = async () => {
-    if (!deferred) return;
+  const install = async () => {
+    if (!deferred) { showSteps(ios ? IOS_STEPS : MENU_STEPS); box.scrollIntoView({ behavior: 'smooth' }); return; }
     deferred.prompt();
     const { outcome } = await deferred.userChoice;
     deferred = null;
     if (outcome === 'accepted') hide();
   };
-  window.addEventListener('appinstalled', hide);
 
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (ios) {
-    showSteps(['Dole ťukni na <b>Zdieľať</b> (štvorček so šípkou ⬆️)', 'Vyber <b>Pridať na plochu</b>', 'Ťukni na <b>Pridať</b>']);
-  } else if (matchMedia('(pointer: coarse)').matches) {
-    setTimeout(() => {
-      if (!deferred) showSteps(['Ťukni na menu prehliadača <b>⋮</b>', 'Vyber <b>Pridať na plochu</b> alebo <b>Inštalovať aplikáciu</b>']);
-    }, 2500);
-  }
+  btn.onclick = install;
+  // tlačidlo dole je stále po ruke – aj keď ponuku hore zavrieš
+  footerBtn.classList.remove('hidden');
+  footerBtn.onclick = install;
+  later.onclick = () => {
+    hide();
+    try { sessionStorage.setItem('installLater', '1'); } catch { /* nevadí */ }
+  };
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferred = e;
+    if (!dismissed) offerButton();
+  });
+  window.addEventListener('appinstalled', () => { hide(); footerBtn.classList.add('hidden'); });
+
+  if (dismissed) return;
+  if (ios) showSteps(IOS_STEPS);
+  else if (matchMedia('(pointer: coarse)').matches) setTimeout(() => { if (!deferred) showSteps(MENU_STEPS); }, 2500);
 }
 
 // ---------- štart ----------

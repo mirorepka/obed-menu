@@ -36,7 +36,8 @@ function color(u, v) {
   return c;
 }
 
-function png(size) {
+// zoom < 1 zmenší obrázok k stredu (maskable ikona: Android ju oreže do kruhu)
+function png(size, zoom = 1) {
   const SS = 3;
   const raw = Buffer.alloc((size * 3 + 1) * size);
   for (let y = 0; y < size; y++) {
@@ -44,7 +45,7 @@ function png(size) {
     for (let x = 0; x < size; x++) {
       const acc = [0, 0, 0];
       for (let sy = 0; sy < SS; sy++) for (let sx = 0; sx < SS; sx++) {
-        const c = color((x + (sx + 0.5) / SS) / size, (y + (sy + 0.5) / SS) / size);
+        const c = color(0.5 + ((x + (sx + 0.5) / SS) / size - 0.5) / zoom, 0.5 + ((y + (sy + 0.5) / SS) / size - 0.5) / zoom);
         acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2];
       }
       const o = y * (size * 3 + 1) + 1 + x * 3;
@@ -58,4 +59,5 @@ function png(size) {
 }
 
 for (const s of [180, 192, 512]) fs.writeFileSync(new URL(`../app/icons/icon-${s}.png`, import.meta.url), png(s));
+fs.writeFileSync(new URL('../app/icons/icon-maskable-512.png', import.meta.url), png(512, 0.72));
 console.log('Ikonky hotové.');
