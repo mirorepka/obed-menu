@@ -1,0 +1,62 @@
+name: Obedové menu a nasadenie
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # pracovné dni (UTC, v zime +1 h, v lete +2 h):
+    # ráno prejde všetky weby, potom ešte 2× skontroluje tie, kde menu býva a ešte nie je
+    - cron: '30 7 * * 1-5'
+    - cron: '45 8 * * 1-5'
+    - cron: '45 9 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # weby, kde bolo menu, a dnešné výsledky z predošlého behu
+      - uses: actions/cache/restore@v4
+        with:
+          path: cache
+          key: menu-cache-${{ github.run_id }}
+          restore-keys: menu-cache-
+      - name: Stiahnuť dnešné menu
+        env:
+          QUICK: ${{ github.event.schedule == '45 8 * * 1-5' || github.event.schedule == '45 9 * * 1-5' }}
+        run: |
+          if [ "$QUICK" != "true" ]; then unset QUICK; fi
+          node tools/update-menus.mjs
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: cache
+          key: menu-cache-${{ github.run_id }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

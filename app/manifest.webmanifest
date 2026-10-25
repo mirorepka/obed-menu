@@ -1,0 +1,17 @@
+{
+  "name": "Obed v okolí",
+  "short_name": "Obed",
+  "description": "Najbližšie obedové menu podľa toho, kde práve si",
+  "lang": "sk",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf6f1",
+  "theme_color": "#c2410c",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

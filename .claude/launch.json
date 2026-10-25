@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "obed-menu",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/serve.mjs"],
+      "port": 5174,
+      "env": { "PORT": "5174" }
+    }
+  ]
+}

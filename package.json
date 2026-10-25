@@ -1,0 +1,13 @@
+{
+  "name": "obed-menu",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "places": "node tools/build-places.mjs",
+    "update": "node tools/update-menus.mjs",
+    "serve": "node tools/serve.mjs"
+  },
+  "devDependencies": {
+    "osm-pbf-parser": "^2.3.0"
+  }
+}
