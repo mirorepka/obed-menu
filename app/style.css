@@ -181,8 +181,7 @@ footer #installFooter { width: 100%; margin-bottom: 10px; }
 
 /* úvod */
 .intro p { margin: 0 0 8px; }
-.intro .muted { font-size: .95rem; }
-.intro .btn { margin-top: 4px; }
+.intro .muted { font-size: .95rem; margin-bottom: 0; }
 
 /* obed / večer */
 .meal { margin: 14px 0 -4px; font-weight: 700; font-size: .95rem; }

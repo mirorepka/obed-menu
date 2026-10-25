@@ -1,6 +1,6 @@
 // Keď je internet, berie sa vždy najnovšia verzia (aj dnešné menu);
 // keď nie je, použije sa posledná uložená.
-const CACHE = 'obed-menu-v2';
+const CACHE = 'obed-menu-v3';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'data/info.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png'];
 const NETWORK_TIMEOUT_MS = 4000;
 

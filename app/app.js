@@ -303,19 +303,7 @@ async function loadInfo() {
   render();
 }
 
-function setupIntro() {
-  let seen = false;
-  try { seen = localStorage.getItem('introSeen') === '1'; } catch { /* súkromné okno */ }
-  if (seen) return;
-  $('intro').classList.remove('hidden');
-  $('introOk').onclick = () => {
-    $('intro').classList.add('hidden');
-    try { localStorage.setItem('introSeen', '1'); } catch { /* nevadí */ }
-  };
-}
-
 async function init() {
-  setupIntro();
   setupInstall();
   $('placeBtn').onclick = () => { $('placePicker').classList.remove('hidden'); $('placeSearch').value = ''; renderPlacePicker(); $('placeSearch').focus(); };
   $('closePlace').onclick = () => $('placePicker').classList.add('hidden');
