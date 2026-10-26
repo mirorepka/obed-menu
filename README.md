@@ -18,6 +18,10 @@ Web: https://menu.repka.sk
   V `cache/` (GitHub Actions cache) si pamätá, kde mal podnik menu naposledy.
 - Aplikácia načíta len dlaždice okolo polohy a ukáže podniky do ~900 m vzdušne (15 min pešo).
 
+## Chýbajúci alebo zlý podnik
+V `data/fixes.json` sa dá podniku opraviť web alebo typ (napr. kaviareň → reštaurácia)
+a pridať podnik, ktorý v OpenStreetMap chýba. Skúška jedného podniku: `MENU_ONLY=<id> node tools/update-menus.mjs`.
+
 ## Obnova zoznamu podnikov (napr. raz za pár mesiacov)
 ```
 curl -L -o slovakia.osm.pbf https://download.geofabrik.de/europe/slovakia-latest.osm.pbf
