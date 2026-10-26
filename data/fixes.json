@@ -1,0 +1,7 @@
+{
+  "_": "Ručné opravy k data/places.json. fix: id z places.json → { web, amenity, name }. add: podniky, ktoré v OpenStreetMap chýbajú.",
+  "fix": {
+    "n2496486238": { "web": "https://pinch.sk/", "amenity": "restaurant" }
+  },
+  "add": []
+}

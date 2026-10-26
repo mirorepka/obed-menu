@@ -44,7 +44,7 @@ const PRICE_RE = /(\d{1,3}[,.]\d{2})\s*(€|eur\b|,-)|€\s*(\d{1,3}[,.]\d{2})/i
 
 // ---------- sťahovanie a text ----------
 async function get(url, timeout = 12000) {
-  const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'sk,cs;q=0.8,en;q=0.5' }, redirect: 'follow', signal: AbortSignal.timeout(timeout) });
+  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8', 'Accept-Language': 'sk,cs;q=0.8,en;q=0.5' }, redirect: 'follow', signal: AbortSignal.timeout(timeout) });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const type = res.headers.get('content-type') || '';
   if (type.includes('pdf')) return { url: res.url, pdf: true };
@@ -320,6 +320,13 @@ async function findMenu(web, known) {
 
 // ---------- beh ----------
 const { places } = readJson(path.join(ROOT, 'data', 'places.json'), { places: [] });
+// Ručné opravy údajov z OpenStreetMap (zlý web, kaviareň, ktorá je reštaurácia, chýbajúci podnik…)
+const fixes = readJson(path.join(ROOT, 'data', 'fixes.json'), { fix: {}, add: [] });
+for (const p of places) {
+  const f = fixes.fix[p[0]];
+  if (f) { if (f.web !== undefined) p[5] = f.web; if (f.amenity) p[4] = f.amenity; if (f.name) p[1] = f.name; }
+}
+places.push(...fixes.add.map((a) => [a.id, a.name, a.lat, a.lon, a.amenity || 'restaurant', a.web || '', a.addr || '', a.city || '']));
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 const sources = readJson(path.join(CACHE_DIR, 'sources.json'), {});   // id → url, kde bolo naposledy menu
 const prev = readJson(path.join(CACHE_DIR, 'today.json'), {});
@@ -328,6 +335,7 @@ const results = prev.date === TODAY ? prev.results : {};              // id → 
 const hostOk = (w) => { try { return !SKIP_HOSTS.test(new URL(w).hostname); } catch { return false; } };
 let todo = places.filter((p) => p[5] && hostOk(p[5]) && !results[p[0]]?.menu);
 if (QUICK) todo = todo.filter((p) => sources[p[0]] || results[p[0]]?.link);
+if (process.env.MENU_ONLY) todo = todo.filter((p) => process.env.MENU_ONLY.split(',').includes(p[0]));   // na skúšanie konkrétnych podnikov
 todo = todo.slice(0, LIMIT);
 console.log(`${TODAY}: prechádzam ${todo.length} webov${QUICK ? ' (rýchly beh)' : ''}…`);
 
